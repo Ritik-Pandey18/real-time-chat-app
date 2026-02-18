@@ -4,9 +4,10 @@ let socket: Socket | null = null;
 
 export const getSocket = (token: string) => {
   if (!socket) {
-    socket = io("http://localhost:5001", {
-      auth: { token }
-    });
+    io("https://real-time-chat-app-pdxq.onrender.com", {
+  auth: { token }
+});
+
   }
   return socket;
 };
