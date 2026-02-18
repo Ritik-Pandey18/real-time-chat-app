@@ -2,77 +2,59 @@ const express = require("express");
 const http = require("http");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const jwt = require("jsonwebtoken");
 const { Server } = require("socket.io");
 require("dotenv").config();
 
 const authRoutes = require("./routes/auth");
+const messageRoutes = require("./routes/messages");
 const Message = require("./models/Message");
 
 const app = express();
 const server = http.createServer(app);
 
+/* ✅ CORS FIX */
 app.use(cors({
-  origin: "https://real-time-chat-app-five-hazel.vercel.app",
-  credentials: true
+  origin: "https://real-time-chat-f8256zeqn-ritik-pandey18s-projects.vercel.app",
+  credentials: true,
 }));
 
 app.use(express.json());
 
 app.use("/auth", authRoutes);
+app.use("/messages", messageRoutes);
 
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log("✅ MongoDB Connected"))
-  .catch((err) => console.log("❌ Mongo Error", err));
+/* ✅ MongoDB */
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("MongoDB Connected"))
+  .catch(err => console.log(err));
 
+/* ✅ Socket.IO */
 const io = new Server(server, {
-  cors: { origin: "http://localhost:3000", credentials: true }
-});
-
-const onlineUsers = new Set();
-
-io.use((socket, next) => {
-  const token = socket.handshake.auth.token;
-  if (!token) return next(new Error("No token"));
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    socket.username = decoded.username; // ✅ ONLY STRING
-    next();
-  } catch {
-    next(new Error("Invalid token"));
+  cors: {
+    origin: "https://real-time-chat-f8256zeqn-ritik-pandey18s-projects.vercel.app",
+    methods: ["GET", "POST"],
+    credentials: true,
   }
 });
 
-io.on("connection", async (socket) => {
-  console.log("🟢 Connected:", socket.username);
-  onlineUsers.add(socket.username);
-  io.emit("onlineUsers", onlineUsers.size);
+io.on("connection", (socket) => {
+  console.log("User connected");
 
-  const messages = await Message.find().sort({ createdAt: 1 }).limit(100);
-  socket.emit("initialMessages", messages);
-
-  socket.on("sendMessage", async (text) => {
-    if (!text.trim()) return;
-
-    const saved = await Message.create({
-      user: socket.username,
-      text
+  socket.on("sendMessage", async (data) => {
+    const message = await Message.create({
+      text: data.text,
+      user: data.userId, // ✅ ONLY STRING ID
+      username: data.username,
     });
-
-    io.emit("receiveMessage", saved);
+    io.emit("receiveMessage", message);
   });
 
   socket.on("disconnect", () => {
-    onlineUsers.delete(socket.username);
-    io.emit("onlineUsers", onlineUsers.size);
-    console.log("🔴 Disconnected:", socket.username);
+    console.log("User disconnected");
   });
 });
 
 const PORT = process.env.PORT || 5001;
-
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log("Server running");
 });
